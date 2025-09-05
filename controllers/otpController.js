@@ -1,4 +1,4 @@
-import Otp from "../models/otp.js";
+import Otp from "../models/Otp.js";
 import Donation from "../models/Donation.js";
 import nodemailer from "nodemailer";
 
