@@ -6,6 +6,7 @@ const gallerySchema = new mongoose.Schema(
     description: { type: String },
     category: { type: String, required: true },
     imageUrl: { type: String, required: true },
+    publicId: { type: String, required: true },
     uploadDate: { type: Date, default: Date.now }
   },
   { timestamps: true }

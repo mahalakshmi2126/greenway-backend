@@ -1,5 +1,6 @@
 // controllers/galleryController.js (Updated with update)
 import Gallery from "../models/Gallery.js";
+import { cloudinary } from "../config/cloudinary.js";
 
 // ✅ Upload Image
 export const uploadImage = async (req, res) => {
@@ -14,7 +15,8 @@ export const uploadImage = async (req, res) => {
       title,
       description,
       category,
-      imageUrl: req.file.path, // cloudinary URL
+      imageUrl: req.file.path, 
+      publicId: req.file.filename, 
     });
 
     await newImage.save();
@@ -28,19 +30,28 @@ export const uploadImage = async (req, res) => {
 export const updateImage = async (req, res) => {
   try {
     const { title, description, category } = req.body;
-    const updateData = { title, description, category };
+    const image = await Gallery.findById(req.params.id);
+    if (!image) return res.status(404).json({ message: "Image not found" });
 
     if (req.file) {
-      updateData.imageUrl = req.file.path;
+      // delete old image from Cloudinary
+      await cloudinary.uploader.destroy(image.publicId);
+
+      image.imageUrl = req.file.path;
+      image.publicId = req.file.filename;
     }
 
-    const image = await Gallery.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    if (!image) return res.status(404).json({ message: "Image not found" });
+    if (title) image.title = title;
+    if (description) image.description = description;
+    if (category) image.category = category;
+
+    await image.save();
     res.json(image);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // ✅ Get All Images
 export const getImages = async (req, res) => {
@@ -57,11 +68,17 @@ export const getImages = async (req, res) => {
   }
 };
 
-// ✅ Delete Image
 export const deleteImage = async (req, res) => {
   try {
-    const image = await Gallery.findByIdAndDelete(req.params.id);
+    const image = await Gallery.findById(req.params.id);
     if (!image) return res.status(404).json({ message: "Image not found" });
+
+    // remove from Cloudinary
+    await cloudinary.uploader.destroy(image.publicId);
+
+    // remove from DB
+    await image.deleteOne();
+
     res.json({ message: "Image deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });

@@ -16,7 +16,19 @@ import coreProgramRoutes from "./routes/coreProgramRoutes.js";
 
 dotenv.config();
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:8080", "https://greenway-heart-connect.vercel.app"], 
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
+  })
+);
+
+app.use(express.json({ limit: "50mb" })); // increase payload limit
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+
+
 app.use(express.json());
 
 // ✅ Connect MongoDB
