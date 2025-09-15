@@ -56,3 +56,14 @@ export const loginAdmin = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// controllers/adminController.js
+export const getAdminProfile = async (req, res) => {
+  try {
+    const admin = await Admin.findById(req.user.id);
+    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    res.json({ admin: admin.toJSON() });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
