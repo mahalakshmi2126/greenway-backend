@@ -60,10 +60,15 @@ export const loginAdmin = async (req, res) => {
 // controllers/adminController.js
 export const getAdminProfile = async (req, res) => {
   try {
+    console.log("User ID:", req.user.id); // Debug
     const admin = await Admin.findById(req.user.id);
-    if (!admin) return res.status(404).json({ message: "Admin not found" });
+    if (!admin) {
+      console.log("Admin not found for ID:", req.user.id); // Debug
+      return res.status(404).json({ message: "Admin not found" });
+    }
     res.json({ admin: admin.toJSON() });
   } catch (err) {
+    console.error("Error in getAdminProfile:", err); // Debug
     res.status(500).json({ message: err.message });
   }
 };
