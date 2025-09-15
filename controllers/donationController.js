@@ -4,49 +4,68 @@ import Razorpay from "razorpay";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,  // ✅ match .env
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
-
-// Create Razorpay order
+// ✅ Create Razorpay Order
 export const createOrder = async (req, res) => {
   try {
-    console.log("Incoming Body:", req.body); // 👈 see amount
     const { amount } = req.body;
-
     if (!amount || isNaN(amount)) {
       return res.status(400).json({ error: "Invalid amount received" });
     }
 
     const order = await razorpay.orders.create({
-      amount: amount * 100,
+      amount: amount * 100, // convert INR to paise
       currency: "INR",
       receipt: "donation_" + Date.now(),
     });
 
-    console.log("Razorpay Order:", order);
     res.json(order);
   } catch (err) {
-    console.error("Razorpay Error:", err); // 👈 see full error in backend
+    console.error("Razorpay Order Error:", err);
     res.status(500).json({ error: err.message });
   }
 };
 
-
-// Verify payment + save donation
+// ✅ Verify payment + save donation
 export const verifyPayment = async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, donor } =
-      req.body;
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      donor,
+    } = req.body;
 
+    console.log("Verify Payment Input:", req.body);
+
+    // Validate required fields
+    const requiredFields = ["name", "email", "phone", "parcelName", "amount", "cause"];
+    const missingFields = requiredFields.filter((field) => !donor[field]);
+    if (missingFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required fields: ${missingFields.join(", ")}`,
+      });
+    }
+
+    // Signature validation
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body.toString())
       .digest("hex");
 
+    console.log("Signature Check:", {
+      order_id: razorpay_order_id,
+      payment_id: razorpay_payment_id,
+      expectedSignature,
+      razorpay_signature,
+    });
+
     if (expectedSignature !== razorpay_signature) {
-      return res.json({ success: false, message: "Signature mismatch" });
+      return res.status(400).json({ success: false, message: "Signature mismatch" });
     }
 
     // Save donation
@@ -54,10 +73,10 @@ export const verifyPayment = async (req, res) => {
       donorName: donor.name,
       donorEmail: donor.email,
       donorPhone: donor.phone,
-      serviceDate: donor.serviceDate,
-      instagram: donor.instagram,
+      serviceDate: donor.serviceDate || null,
+      instagram: donor.instagram || "",
       parcelName: donor.parcelName,
-      count: donor.count,
+      count: donor.count || 1,
       amountPerItem: donor.amount,
       totalAmount: donor.count * donor.amount,
       cause: donor.cause,
@@ -68,13 +87,15 @@ export const verifyPayment = async (req, res) => {
       signature: razorpay_signature,
     });
 
-    res.json({ success: true, donation });
+    console.log("Donation Saved:", donation);
+    res.status(200).json({ success: true, donation });
   } catch (err) {
+    console.error("Verify Payment Error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
 
-// Fetch donation history by email
+// ✅ Get donations by email
 export const getDonationsByEmail = async (req, res) => {
   try {
     const { email } = req.query;
@@ -87,8 +108,7 @@ export const getDonationsByEmail = async (req, res) => {
   }
 };
 
-
-// ✅ Get all donations (for admin)
+// ✅ Get all donations
 export const getAllDonations = async (req, res) => {
   try {
     const donations = await Donation.find().sort({ createdAt: -1 });
@@ -98,7 +118,7 @@ export const getAllDonations = async (req, res) => {
   }
 };
 
-// ✅ Latest donations (limit 10)
+// ✅ Latest donations
 export const getLatestDonations = async (req, res) => {
   try {
     const donations = await Donation.find({ status: "completed" })
