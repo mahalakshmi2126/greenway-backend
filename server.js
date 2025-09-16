@@ -60,4 +60,11 @@ app.use("/api/core-programs", coreProgramRoutes);
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+// if running locally -> use app.listen
+if (process.env.NODE_ENV !== "production") {
+  app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+}
+
+// if running on Vercel -> just export
+export default app;
