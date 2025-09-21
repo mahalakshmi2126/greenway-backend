@@ -121,9 +121,18 @@ export const getAllDonations = async (req, res) => {
 // ✅ Latest donations
 export const getLatestDonations = async (req, res) => {
   try {
-    const donations = await Donation.find({ status: "completed" })
-      .sort({ createdAt: -1 })
-      .limit(10);
+    const donations = await Donation.aggregate([
+      { $match: { status: "completed" } },
+      { $sort: { createdAt: -1 } }, // latest first
+      {
+        $group: {
+          _id: "$donorName",
+          donorName: { $first: "$donorName" }, // keep first (latest)
+          totalAmount: { $first: "$totalAmount" }, // keep their latest donation amount
+        },
+      },
+      { $limit: 10 },
+    ]);
 
     res.json(donations);
   } catch (err) {
