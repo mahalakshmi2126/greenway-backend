@@ -127,8 +127,10 @@ export const getLatestDonations = async (req, res) => {
       {
         $group: {
           _id: "$donorName",
-          donorName: { $first: "$donorName" }, // keep first (latest)
-          totalAmount: { $first: "$totalAmount" }, // keep their latest donation amount
+          donorName: { $first: "$donorName" },
+          totalAmount: { $first: "$totalAmount" },
+          cause: { $first: "$cause" },
+          createdAt: { $first: "$createdAt" }, // ✅ include date
         },
       },
       { $limit: 10 },
