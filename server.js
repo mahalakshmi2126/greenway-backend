@@ -12,7 +12,7 @@ import volunteerRoutes from "./routes/volunteerRoutes.js"
 import searchRoutes from "./routes/searchRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import coreProgramRoutes from "./routes/coreProgramRoutes.js";
-
+import qrRoutes from "./routes/qrRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -57,6 +57,7 @@ app.use("/api/volunteers", volunteerRoutes);
 app.use("/api/search", searchRoutes); 
 app.use("/api/contact", contactRoutes);
 app.use("/api/core-programs", coreProgramRoutes);
+app.use("/api/qr", qrRoutes);
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;

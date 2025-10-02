@@ -12,7 +12,7 @@ const router = express.Router();
 router.post("/register", registerVolunteer);
 
 // Get all volunteers
-router.get("/", getVolunteers);
+router.get("/get", getVolunteers);
 
 // Update volunteer status
 router.put("/:id/status", updateVolunteerStatus);
