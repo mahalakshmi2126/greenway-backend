@@ -1,7 +1,6 @@
 import express from "express";
 import {
-  createOrder,
-  verifyPayment,
+  saveDonation,          // new controller for manual/UPI donation
   getDonationsByEmail,
   getAllDonations,
   getLatestDonations,
@@ -11,20 +10,20 @@ import { protect } from "../middleware/authmiddleware.js";
 
 const router = express.Router();
 
-// Donation + Razorpay
-router.post("/payments/create-order", createOrder);
-router.post("/payments/verify", verifyPayment);
+// ✅ Manual/UPI donation
+router.post("/donations/save", saveDonation);
 
-// OTP
+// OTP routes
 router.post("/otp/send", sendOtp);
 router.post("/otp/verify", verifyOtp);
 
-// Donation history (direct without OTP, admin only maybe)
+// Donation history (by email)
 router.get("/donations", getDonationsByEmail);
 
-// ✅ Admin fetch all
+// Admin fetch all donations
 router.get("/donations/all", protect, getAllDonations);
 
-router.get("/donations/latest", getLatestDonations); 
+// Latest donations
+router.get("/donations/latest", getLatestDonations);
 
 export default router;

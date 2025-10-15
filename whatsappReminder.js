@@ -1,42 +1,74 @@
+// whatsappReminder.js
 import cron from "node-cron";
 import moment from "moment";
 import { Client } from "whatsapp-web.js";
 import mongoose from "mongoose";
-import Donor from "./models/Donor.js";
+import Donation from "./models/Donation.js"; // ✅ Use Donation model, not Donor
 
-// ✅ WhatsApp Client
+// ✅ Initialize WhatsApp Client
 const client = new Client();
 client.initialize();
 
 client.on("ready", () => {
-  console.log("WhatsApp Client Ready");
+  console.log("✅ WhatsApp Client Ready");
 });
 
-// ✅ Connect to MongoDB (if not already connected in main server.js)
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log("MongoDB Connected for WhatsApp Reminder"))
-.catch((err) => console.error(err));
+// ✅ Connect to MongoDB (if not connected in main server)
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("✅ MongoDB Connected for WhatsApp Reminder"))
+  .catch((err) => console.error(err));
 
-// ✅ Cron Job: run every day at 10 AM server time
+// ✅ Cron Job: runs every day at 10 AM
 cron.schedule("0 10 * * *", async () => {
-  console.log("Running daily donation reminder check...");
+  console.log("🕘 Running daily monthly donation reminder check...");
 
-  const today = moment().date(); // day number today
+  const today = moment().startOf("day");
 
-  const donors = await Donor.find();
+  try {
+    // Find all monthly donors whose nextReminderDate is today
+    const donors = await Donation.find({
+      isMonthly: true,
+      nextReminderDate: { $lte: today.toDate() },
+    });
 
-  donors.forEach(donor => {
-    const donorDay = moment(donor.start_date).date();
-
-    if (donorDay === today) {
-      const msg = `Vanakkam ${donor.name} 🙏\nIdhu unga monthly donation reminder.\nAmount: ₹${donor.amount}\nPay here: upi://pay?pa=greenwaytrust50.rzp@icici&pn=GreenwayTrust&am=${donor.amount}&cu=INR\nNandri 💚`;
-      
-      client.sendMessage(`${donor.phone}@c.us`, msg)
-        .then(() => console.log(`Reminder sent to ${donor.name}`))
-        .catch(err => console.error(`Failed to send to ${donor.name}`, err));
+    if (!donors.length) {
+      console.log("No reminders due today ✅");
+      return;
     }
-  });
+
+    for (const donor of donors) {
+      const msg = `🌿 Vanakkam ${donor.donorName} 🙏
+Idhu unga monthly donation reminder 🌱
+
+💰 Amount: ₹${donor.monthlyAmount}
+🪷 Cause: ${donor.cause}
+📅 Date: ${moment(donor.nextReminderDate).format("DD MMM YYYY")}
+
+UPI Pay Link 👇
+upi://pay?pa=greenwaytrust50.rzp@icici&pn=GreenwayTrust&am=${donor.monthlyAmount}&cu=INR
+
+Ungal support ku romba nandri 💚`;
+
+      const phoneNumber = donor.donorPhone.replace(/\D/g, "");
+
+      if (phoneNumber.length === 10) {
+        await client.sendMessage(`91${phoneNumber}@c.us`, msg);
+        console.log(`✅ Reminder sent to ${donor.donorName}`);
+
+        // ✅ Update nextReminderDate to next month
+        donor.nextReminderDate = moment(donor.nextReminderDate)
+          .add(1, "month")
+          .toDate();
+        await donor.save();
+      } else {
+        console.log(`⚠️ Invalid phone for ${donor.donorName}`);
+      }
+    }
+  } catch (err) {
+    console.error("❌ Reminder job failed:", err);
+  }
 });

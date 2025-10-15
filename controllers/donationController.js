@@ -1,48 +1,12 @@
 import Donation from "../models/Donation.js";
-import crypto from "crypto";
-import Razorpay from "razorpay";
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
-// ✅ Create Razorpay Order
-export const createOrder = async (req, res) => {
+// ✅ Save a new donation (manual/UPI)
+export const saveDonation = async (req, res) => {
   try {
-    const { amount } = req.body;
-    if (!amount || isNaN(amount)) {
-      return res.status(400).json({ error: "Invalid amount received" });
-    }
-
-    const order = await razorpay.orders.create({
-      amount: amount * 100, // convert INR to paise
-      currency: "INR",
-      receipt: "donation_" + Date.now(),
-    });
-
-    res.json(order);
-  } catch (err) {
-    console.error("Razorpay Order Error:", err);
-    res.status(500).json({ error: err.message });
-  }
-};
-
-// ✅ Verify payment + save donation
-export const verifyPayment = async (req, res) => {
-  try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      donor,
-    } = req.body;
-
-    console.log("Verify Payment Input:", req.body);
-
-    // Validate required fields
+    const { donor, isMonthly } = req.body;
     const requiredFields = ["name", "email", "phone", "parcelName", "amount", "cause"];
     const missingFields = requiredFields.filter((field) => !donor[field]);
+
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
@@ -50,47 +14,26 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-    // Signature validation
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest("hex");
-
-    console.log("Signature Check:", {
-      order_id: razorpay_order_id,
-      payment_id: razorpay_payment_id,
-      expectedSignature,
-      razorpay_signature,
-    });
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Signature mismatch" });
-    }
-
-    // Save donation
     const donation = await Donation.create({
       donorName: donor.name,
       donorEmail: donor.email,
       donorPhone: donor.phone,
-      serviceDate: donor.serviceDate || null,
-      instagram: donor.instagram || "",
       parcelName: donor.parcelName,
       count: donor.count || 1,
       amountPerItem: donor.amount,
       totalAmount: donor.count * donor.amount,
       cause: donor.cause,
-      status: "completed",
-      method: "Razorpay",
-      orderId: razorpay_order_id,
-      paymentId: razorpay_payment_id,
-      signature: razorpay_signature,
+      status: "pending", // can be updated manually to "completed"
+      method: "UPI",
+      isMonthly: isMonthly || false,
+      monthlyAmount: isMonthly ? donor.amount : undefined,
+      startDate: isMonthly ? new Date() : undefined,
+      nextReminderDate: isMonthly ? new Date() : undefined,
     });
 
-    console.log("Donation Saved:", donation);
     res.status(200).json({ success: true, donation });
   } catch (err) {
-    console.error("Verify Payment Error:", err);
+    console.error("Save Donation Error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 };
@@ -99,9 +42,7 @@ export const verifyPayment = async (req, res) => {
 export const getDonationsByEmail = async (req, res) => {
   try {
     const { email } = req.query;
-    const donations = await Donation.find({ donorEmail: email }).sort({
-      createdAt: -1,
-    });
+    const donations = await Donation.find({ donorEmail: email }).sort({ createdAt: -1 });
     res.json(donations);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -123,14 +64,14 @@ export const getLatestDonations = async (req, res) => {
   try {
     const donations = await Donation.aggregate([
       { $match: { status: "completed" } },
-      { $sort: { createdAt: -1 } }, // latest first
+      { $sort: { createdAt: -1 } },
       {
         $group: {
           _id: "$donorName",
           donorName: { $first: "$donorName" },
           totalAmount: { $first: "$totalAmount" },
           cause: { $first: "$cause" },
-          createdAt: { $first: "$createdAt" }, // ✅ include date
+          createdAt: { $first: "$createdAt" },
         },
       },
       { $limit: 10 },
