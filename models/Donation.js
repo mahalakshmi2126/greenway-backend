@@ -5,7 +5,7 @@ const donationSchema = new mongoose.Schema(
     donorName: { type: String, required: true },
     donorEmail: { type: String, required: true },
     donorPhone: { type: String, required: true },
-    serviceDate: { type: Date },
+    serviceDate: { type: Date },        // for one-time donations
     instagram: { type: String },
     parcelName: { type: String, required: true },
     count: { type: Number, default: 1 },
@@ -22,6 +22,12 @@ const donationSchema = new mongoose.Schema(
     orderId: { type: String },
     paymentId: { type: String },
     signature: { type: String },
+
+    // ✅ Monthly subscription fields
+    isMonthly: { type: Boolean, default: false },
+    monthlyAmount: { type: Number },        // amount to pay each month
+    nextReminderDate: { type: Date },       // next reminder date
+    startDate: { type: Date },              // first subscription date
   },
   { timestamps: true }
 );
