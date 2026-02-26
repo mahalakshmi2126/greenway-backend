@@ -3,7 +3,8 @@ import { generateQR } from "../controllers/qrController.js";
 
 const router = express.Router();
 
-// POST /api/qr/generate-qr
+// Ippo idhu Razorpay official Dynamic QR-ah generate pannum
+// Amount-ah lock panna indha route dhaan use aagum
 router.post("/generate-qr", generateQR);
 
-export default router;  // ✅ important
+export default router;

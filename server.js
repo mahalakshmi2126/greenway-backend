@@ -13,12 +13,13 @@ import searchRoutes from "./routes/searchRoutes.js";
 import contactRoutes from "./routes/contactRoutes.js";
 import coreProgramRoutes from "./routes/coreProgramRoutes.js";
 import qrRoutes from "./routes/qrRoutes.js";
+import financialRoutes from "./routes/financialRoutes.js";
 
 dotenv.config();
 const app = express();
 app.use(
   cors({
-    origin: ["http://localhost:8080", "https://greenway-heart-connect.vercel.app"], 
+    origin: ["http://localhost:8080", "https://greenway-heart-connect.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
@@ -54,10 +55,21 @@ app.use("/api/gallery", galleryRoutes);
 // app.use("/api/payments", paymentRoutes);
 app.use("/api", donationRoutes);
 app.use("/api/volunteers", volunteerRoutes);
-app.use("/api/search", searchRoutes); 
+app.use("/api/search", searchRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/core-programs", coreProgramRoutes);
 app.use("/api/qr", qrRoutes);
+app.use("/api/financials", financialRoutes);
+app.use("/uploads", express.static("uploads"));
+
+// ✅ Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
 
 // ✅ Start Server
 const PORT = process.env.PORT || 5000;

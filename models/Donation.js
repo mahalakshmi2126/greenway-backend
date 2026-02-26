@@ -3,8 +3,8 @@ import mongoose from "mongoose";
 const donationSchema = new mongoose.Schema(
   {
     donorName: { type: String, required: true },
-    donorEmail: { type: String, required: true },
-    donorPhone: { type: String, required: true },
+    donorEmail: { type: String },
+    donorPhone: { type: String },
     serviceDate: { type: Date },        // for one-time donations
     instagram: { type: String },
     parcelName: { type: String, required: true },
