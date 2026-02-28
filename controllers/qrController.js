@@ -1,6 +1,5 @@
 import Razorpay from "razorpay";
 import Donation from "../models/Donation.js";
-import crypto from "crypto";
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -15,25 +14,7 @@ export const generateQR = async (req, res) => {
       return res.status(400).json({ success: false, message: "Amount is required" });
     }
 
-    const options = {
-      type: "upi_qr",
-      name: "Greenway Trust",
-      usage: "single_use",
-      fixed_amount: true,
-      payment_amount: amount * 100,
-      description: `Donation for ${cause || "General"}`,
-      notes: {
-        qr_id: null, // Placeholder
-        donorName,
-        donorEmail,
-        donorPhone,
-        cause
-      }
-    };
-
-    const qrCode = await razorpay.qrCode.create(options);
-
-    // Save donation with QR ID in orderId field
+    // 1. First, create a pending record in DB to get its _id
     const donationRecord = await Donation.create({
       donorName: donorName || "Anonymous",
       donorEmail: donorEmail || "",
@@ -45,13 +26,35 @@ export const generateQR = async (req, res) => {
       cause: cause || "General",
       status: "pending",
       method: "UPI QR (Razorpay)",
-      orderId: qrCode.id,
       serviceDate: req.body.serviceDate || new Date(),
       instagram: req.body.instagram || "",
       isMonthly: req.body.isMonthly || false,
       monthlyAmount: req.body.isMonthly ? amount : null,
       startDate: req.body.isMonthly ? new Date() : null
     });
+
+    // 2. Now create QR Code and put THIS donationRecord._id in notes
+    const options = {
+      type: "upi_qr",
+      name: "Greenway Trust",
+      usage: "single_use",
+      fixed_amount: true,
+      payment_amount: amount * 100,
+      description: `Donation for ${cause || "General"}`,
+      notes: {
+        db_donation_id: donationRecord._id.toString(), // ✅ THIS IS KEY
+        donorName: donorName || "Anonymous",
+        donorPhone: donorPhone || ""
+      }
+    };
+
+    const qrCode = await razorpay.qrCode.create(options);
+
+    // 3. Update the record with the QR ID
+    donationRecord.orderId = qrCode.id;
+    await donationRecord.save();
+
+    console.log(`✅ QR Created for Donation: ${donationRecord._id}`);
 
     return res.json({
       success: true,
@@ -74,51 +77,57 @@ export const generateQR = async (req, res) => {
 };
 
 export const verifyWebhook = async (req, res) => {
-  // 1. Send immediate 200 response to Razorpay (To stop retries)
+  // Acknowledge immediately
   res.status(200).json({ status: "ok" });
 
   try {
-    const event = req.body.event;
-    console.log(`🔔 Webhook signal received: ${event}`);
+    const { event, payload } = req.body;
+    console.log(`🔔 Webhook signal: ${event}`);
 
-    // If you want to see the full body once in logs for debugging:
-    // console.log("BODY:", JSON.stringify(req.body, null, 2));
+    let donationId = null;
 
-    let qrId = null;
+    // ✅ THE MOST RELIABLE WAY: Pull Donation ID from our custom notes
+    const payment = payload.payment?.entity;
+    donationId = payment?.notes?.db_donation_id;
 
-    // 2. EXTREMELY BROAD EXTRACTION
-    // We check every possible field where Razorpay puts the QR ID
-    if (req.body.payload) {
-      const p = req.body.payload;
-      qrId = p.qr_code?.entity?.id ||
-        p.payment?.entity?.notes?.qr_id ||
-        p.payment?.entity?.notes?.qr_code_id ||
-        p.payment?.entity?.qr_code_id ||
-        p.payment?.entity?.order_id;
-    }
+    // Fallback: If not in notes, search via QR ID/Order ID
+    const qrId = payload.qr_code?.entity?.id || payment?.qr_code_id || payment?.order_id;
 
-    // 3. Status Update if QR ID found
-    if (qrId && (event === "payment.captured" || event === "qr_code.payment_captured")) {
-      console.log(`💎 Found QR ID: ${qrId}. Attempting DB Status Update...`);
-
-      const updated = await Donation.findOneAndUpdate(
-        { orderId: qrId },
+    if (donationId) {
+      console.log(`💎 Found DB Donation ID: ${donationId}. Updating status...`);
+      const updated = await Donation.findByIdAndUpdate(
+        donationId,
         {
           status: "completed",
-          paymentId: req.body.payload.payment?.entity?.id || "WEBHOOK_CAPTURED"
+          paymentId: payment?.id,
+          method: "UPI (Paid via QR)"
         },
         { new: true }
       );
-
       if (updated) {
-        console.log(`🚀 MISSION SUCCESS! Donation ${updated._id} is now COMPLETED.`);
-      } else {
-        console.warn(`⚠️ QR ID ${qrId} received, but no matching pending record in DB.`);
+        console.log(`🚀 SUCCESS! Donation ${updated._id} is now COMPLETED.`);
+        return;
       }
-    } else {
-      console.warn("⚠️ Signal received but couldn't find a valid QR ID to update.");
     }
+
+    if (qrId) {
+      console.log(`🔍 Searching by QR ID: ${qrId}`);
+      const updatedByQR = await Donation.findOneAndUpdate(
+        { orderId: qrId },
+        {
+          status: "completed",
+          paymentId: payment?.id
+        },
+        { new: true }
+      );
+      if (updatedByQR) {
+        console.log(`🚀 SUCCESS (via QR ID)! Donation ${updatedByQR._id} COMPLETED.`);
+      } else {
+        console.warn(`⚠️ No record found for QR ID: ${qrId}`);
+      }
+    }
+
   } catch (error) {
-    console.error("❌ Webhook Processing Error:", error.message);
+    console.error("❌ Webhook Fatal Error:", error.message);
   }
 };
