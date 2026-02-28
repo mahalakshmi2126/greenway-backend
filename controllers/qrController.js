@@ -23,6 +23,7 @@ export const generateQR = async (req, res) => {
       payment_amount: amount * 100,
       description: `Donation for ${cause || "General"}`,
       notes: {
+        qr_id: null, // Placeholder
         donorName,
         donorEmail,
         donorPhone,
@@ -32,7 +33,7 @@ export const generateQR = async (req, res) => {
 
     const qrCode = await razorpay.qrCode.create(options);
 
-    // ✅ Storing the QR ID in 'orderId' field
+    // Save donation with QR ID in orderId field
     const donationRecord = await Donation.create({
       donorName: donorName || "Anonymous",
       donorEmail: donorEmail || "",
@@ -52,21 +53,17 @@ export const generateQR = async (req, res) => {
       startDate: req.body.isMonthly ? new Date() : null
     });
 
-    const bankDetails = {
-      accountName: "Greenway Trust",
-      accountNumber: "51680200001365",
-      ifsc: "BARB0AAMBUR",
-      bankName: "Bank of Baroda",
-      branch: "AAMBUR",
-      upiId: "greenwaytrust50.rzp@icici"
-    };
-
     return res.json({
       success: true,
       qrImage: qrCode.image_url,
-      paymentLink: qrCode.payment_url,
       qrId: qrCode.id,
-      bankDetails,
+      bankDetails: {
+        accountName: "Greenway Trust",
+        accountNumber: "51680200001365",
+        ifsc: "BARB0AAMBUR",
+        bankName: "Bank of Baroda",
+        upiId: "greenwaytrust50.rzp@icici"
+      },
       amount,
       donationId: donationRecord._id
     });
@@ -77,58 +74,51 @@ export const generateQR = async (req, res) => {
 };
 
 export const verifyWebhook = async (req, res) => {
+  // 1. Send immediate 200 response to Razorpay (To stop retries)
+  res.status(200).json({ status: "ok" });
+
   try {
-    const secret = process.env.RAZORPAY_WEBHOOK_SECRET || "greenway_secret_123";
-    const signature = req.headers["x-razorpay-signature"];
+    const event = req.body.event;
+    console.log(`🔔 Webhook signal received: ${event}`);
 
-    console.log("🔔 WEBHOOK CALLED! Event:", req.body.event);
+    // If you want to see the full body once in logs for debugging:
+    // console.log("BODY:", JSON.stringify(req.body, null, 2));
 
-    // Basic Signature Check (Log only for now)
-    const body = JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac("sha256", secret)
-      .update(body)
-      .digest("hex");
+    let qrId = null;
 
-    if (signature !== expectedSignature) {
-      console.warn("⚠️ Webhook signature mismatch. Continuing for status update check.");
+    // 2. EXTREMELY BROAD EXTRACTION
+    // We check every possible field where Razorpay puts the QR ID
+    if (req.body.payload) {
+      const p = req.body.payload;
+      qrId = p.qr_code?.entity?.id ||
+        p.payment?.entity?.notes?.qr_id ||
+        p.payment?.entity?.notes?.qr_code_id ||
+        p.payment?.entity?.qr_code_id ||
+        p.payment?.entity?.order_id;
     }
 
-    const { event, payload } = req.body;
+    // 3. Status Update if QR ID found
+    if (qrId && (event === "payment.captured" || event === "qr_code.payment_captured")) {
+      console.log(`💎 Found QR ID: ${qrId}. Attempting DB Status Update...`);
 
-    if (event === "payment.captured" || event === "qr_code.payment_captured") {
-      const payment = payload.payment?.entity;
+      const updated = await Donation.findOneAndUpdate(
+        { orderId: qrId },
+        {
+          status: "completed",
+          paymentId: req.body.payload.payment?.entity?.id || "WEBHOOK_CAPTURED"
+        },
+        { new: true }
+      );
 
-      // ✅ Critical: Check multiple places for QR ID
-      const qrId = payment?.qr_code_id || payload.qr_code?.entity?.id || payment?.notes?.qr_id || payment?.notes?.qr_code_id;
-
-      console.log(`🔍 Received Payment for QR ID: ${qrId}`);
-
-      if (qrId) {
-        // Find by ORDER ID (which stores QR ID)
-        const donation = await Donation.findOneAndUpdate(
-          { orderId: qrId },
-          {
-            status: "completed",
-            paymentId: payment?.id,
-            method: "UPI Captured"
-          },
-          { new: true }
-        );
-
-        if (donation) {
-          console.log(`✅ SUCCESS! Donation ${donation._id} marked as COMPLETED.`);
-        } else {
-          console.error(`❌ ERROR! Matching donation NOT FOUND in DB for QR ID: ${qrId}`);
-        }
+      if (updated) {
+        console.log(`🚀 MISSION SUCCESS! Donation ${updated._id} is now COMPLETED.`);
       } else {
-        console.warn("⚠️ No QR ID found in the webhook payload.");
+        console.warn(`⚠️ QR ID ${qrId} received, but no matching pending record in DB.`);
       }
+    } else {
+      console.warn("⚠️ Signal received but couldn't find a valid QR ID to update.");
     }
-
-    return res.status(200).json({ status: "ok" });
-  } catch (err) {
-    console.error("❌ WEBHOOK FATAL ERROR:", err.message);
-    return res.status(500).json({ status: "error" });
+  } catch (error) {
+    console.error("❌ Webhook Processing Error:", error.message);
   }
 };
