@@ -14,6 +14,8 @@ import contactRoutes from "./routes/contactRoutes.js";
 import coreProgramRoutes from "./routes/coreProgramRoutes.js";
 import qrRoutes from "./routes/qrRoutes.js";
 import financialRoutes from "./routes/financialRoutes.js";
+import trusteeRoutes from "./routes/trusteeRoutes.js";
+import coordinatorRoutes from "./routes/coordinatorRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -60,6 +62,8 @@ app.use("/api/contact", contactRoutes);
 app.use("/api/core-programs", coreProgramRoutes);
 app.use("/api/qr", qrRoutes);
 app.use("/api/financials", financialRoutes);
+app.use("/api/trustees", trusteeRoutes);
+app.use("/api/coordinators", coordinatorRoutes);
 app.use("/uploads", express.static("uploads"));
 
 // ✅ Global Error Handler

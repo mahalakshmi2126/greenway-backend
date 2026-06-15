@@ -10,6 +10,7 @@ const volunteerSchema = new mongoose.Schema({
   city: { type: String, required: true },
   password: { type: String, required: true },
   volunteerType: { type: String, required: true },
+  bloodGroup: { type: String, required: true },
   status: { type: String, default: "pending" }, // pending | accepted | rejected
   appliedDate: { type: Date, default: Date.now },
   experience: { type: String },
