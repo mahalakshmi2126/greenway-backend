@@ -21,7 +21,7 @@ dotenv.config();
 const app = express();
 app.use(
   cors({
-    origin: ["http://localhost:8080", "https://greenway-heart-connect.vercel.app"],
+    origin: ["http://localhost:8080", "https://greenway-heart-connect.vercel.app", "https://greenway-heart-connect-v2.vercel.app"],
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
